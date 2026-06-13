@@ -5,7 +5,7 @@ import { TopBar } from "../components/TopBar";
 import { TaskCard, formatINR } from "../components/TaskCard";
 import { API, useAuth } from "../auth";
 import { CATEGORIES } from "../constants";
-import { Coins, CheckCircle, Briefcase, Sparkle, X, ArrowSquareOut } from "@phosphor-icons/react";
+import { Coins, CheckCircle, Briefcase, Sparkle, X, ArrowSquareOut, MagnifyingGlass, Trophy, Paperclip } from "@phosphor-icons/react";
 
 const Stat = ({ label, value, icon: Icon, color = "#FACC15" }) => (
   <div className="sq-card p-5">
@@ -25,23 +25,29 @@ export default function WorkerDashboard() {
   const [tasks, setTasks] = useState([]);
   const [assigned, setAssigned] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [badges, setBadges] = useState([]);
   const [category, setCategory] = useState("");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("newest");
   const [selectedTask, setSelectedTask] = useState(null);
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [submitForm, setSubmitForm] = useState({ submission_text: "", submission_url: "" });
+  const [submitForm, setSubmitForm] = useState({ submission_text: "", submission_url: "", file_path: "", file_name: "" });
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [submittingTask, setSubmittingTask] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loadAll = async () => {
     try {
-      const [openRes, assignedRes, subsRes] = await Promise.all([
-        axios.get(`${API}/tasks`, { params: { status: "open", category: category || undefined } }),
+      const [openRes, assignedRes, subsRes, badgesRes] = await Promise.all([
+        axios.get(`${API}/tasks`, { params: { status: "open", category: category || undefined, q: query || undefined, sort } }),
         axios.get(`${API}/tasks`, { params: { mine: "assigned" } }),
         axios.get(`${API}/submissions`, { params: { mine: "worker" } }),
+        axios.get(`${API}/badges`),
       ]);
       setTasks(openRes.data);
       setAssigned(assignedRes.data);
       setSubmissions(subsRes.data);
+      setBadges(badgesRes.data);
     } catch (e) {
       toast.error("Could not load data");
     } finally {
@@ -49,7 +55,14 @@ export default function WorkerDashboard() {
     }
   };
 
-  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [category]);
+  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [category, sort]);
+
+  // Debounced search
+  useEffect(() => {
+    const t = setTimeout(() => loadAll(), 300);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line */
+  }, [query]);
 
   const apply = async (task) => {
     try {
@@ -64,8 +77,29 @@ export default function WorkerDashboard() {
 
   const openSubmit = (task) => {
     setSubmittingTask(task);
-    setSubmitForm({ submission_text: "", submission_url: "" });
+    setSubmitForm({ submission_text: "", submission_url: "", file_path: "", file_name: "" });
     setSubmitOpen(true);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("File too large (max 25MB)");
+      return;
+    }
+    setUploadingFile(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await axios.post(`${API}/upload`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setSubmitForm((f) => ({ ...f, file_path: res.data.path, file_name: res.data.filename }));
+      toast.success("File uploaded");
+    } catch (err) {
+      toast.error("Upload failed");
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   const submitWork = async () => {
@@ -117,6 +151,29 @@ export default function WorkerDashboard() {
 
         {tab === "available" && (
           <>
+            <div className="flex flex-col md:flex-row gap-3 mb-4">
+              <div className="relative flex-1">
+                <MagnifyingGlass size={18} weight="bold" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  placeholder="Search tasks by title, description or category..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="sq-input pl-10"
+                  data-testid="worker-search-input"
+                />
+              </div>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="sq-input md:w-56"
+                data-testid="worker-sort-select"
+              >
+                <option value="newest">Newest first</option>
+                <option value="budget_desc">Budget: high → low</option>
+                <option value="budget_asc">Budget: low → high</option>
+                <option value="deadline">Deadline soonest</option>
+              </select>
+            </div>
             <div className="flex flex-wrap gap-2 mb-5">
               <button onClick={() => setCategory("")} className={`sq-chip ${category === "" ? "bg-[#FACC15]" : ""}`} data-testid="filter-all">All</button>
               {CATEGORIES.map((c) => (
@@ -126,7 +183,7 @@ export default function WorkerDashboard() {
               ))}
             </div>
             {loading ? <p>Loading...</p> : tasks.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600">No open tasks here yet. Check back soon!</div>
+              <div className="sq-card p-10 text-center text-slate-600">No tasks match. Try a different search or category.</div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {tasks.map((t) => (
@@ -206,11 +263,27 @@ export default function WorkerDashboard() {
               )}
             </div>
             <span className="sq-label text-slate-500">Skill badges</span>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {completed === 0 ? (
+            <div className="grid sm:grid-cols-2 gap-3 mt-2">
+              {badges.length === 0 ? (
                 <span className="text-sm text-slate-500">Complete tasks to unlock badges!</span>
               ) : (
-                <span className="sq-badge bg-[#FACC15]">🏆 First Quest Complete</span>
+                badges.map((b) => (
+                  <div key={b.category} className="sq-card p-4 bg-[#FFFDF9]" data-testid={`badge-${b.category.toLowerCase().replace(/\s+/g, "-")}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl border-2 border-slate-900 bg-[#FACC15] flex items-center justify-center">
+                        <Trophy size={24} weight="fill" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-sm" style={{ fontFamily: "Outfit" }}>{b.category}</div>
+                        <div className="text-xs text-slate-600">Level {b.level} • {b.completed_count} task{b.completed_count > 1 ? "s" : ""}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-2 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden">
+                      <div className="h-full bg-[#FF5A5F]" style={{ width: `${Math.min(100, (b.completed_count % 5) * 20 + 20)}%` }} />
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">{formatINR(b.total_earned || 0)} earned</div>
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -258,10 +331,28 @@ export default function WorkerDashboard() {
             placeholder="Link to your work (Google Drive, Docs, Figma...)"
             value={submitForm.submission_url}
             onChange={(e) => setSubmitForm({ ...submitForm, submission_url: e.target.value })}
-            className="sq-input mb-4"
+            className="sq-input mb-3"
             data-testid="submit-url-input"
           />
-          <button onClick={submitWork} className="sq-btn sq-btn-primary w-full" data-testid="submit-work-btn">
+          <label className="block mb-4">
+            <span className="sq-label text-slate-500 block mb-2">Attach a file (optional, max 25MB)</span>
+            <div className="sq-card p-4 bg-[#FFFDF9] cursor-pointer hover:bg-white transition-colors">
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                className="hidden"
+                data-testid="submit-file-input"
+                disabled={uploadingFile}
+              />
+              <div className="flex items-center gap-2 text-sm">
+                <Paperclip size={16} weight="bold" />
+                <span className="font-semibold">
+                  {uploadingFile ? "Uploading..." : submitForm.file_name ? submitForm.file_name : "Click to upload a file"}
+                </span>
+              </div>
+            </div>
+          </label>
+          <button onClick={submitWork} disabled={uploadingFile} className="sq-btn sq-btn-primary w-full" data-testid="submit-work-btn">
             Submit for review <ArrowSquareOut size={18} weight="bold" />
           </button>
         </Modal>

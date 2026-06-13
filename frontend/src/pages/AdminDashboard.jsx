@@ -266,7 +266,7 @@ export default function AdminDashboard() {
           <div className="sq-card overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b-2 border-slate-900">
-                <tr className="text-left"><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Role</th><th className="p-3">Interest</th><th className="p-3">Joined</th></tr>
+                <tr className="text-left"><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Role</th><th className="p-3">Referrals</th><th className="p-3">Code</th><th className="p-3">Interest</th><th className="p-3">Joined</th></tr>
               </thead>
               <tbody>
                 {waitlist.map((w) => (
@@ -274,6 +274,8 @@ export default function AdminDashboard() {
                     <td className="p-3 font-semibold">{w.name}</td>
                     <td className="p-3">{w.email}</td>
                     <td className="p-3"><span className="sq-badge bg-[#FACC15]">{w.role}</span></td>
+                    <td className="p-3"><span className="font-black">{w.referrals_count || 0}</span></td>
+                    <td className="p-3 font-mono text-xs">{w.referral_code || "—"}</td>
                     <td className="p-3 text-slate-600">{w.interest || "—"}</td>
                     <td className="p-3 text-xs text-slate-500">{new Date(w.created_at).toLocaleDateString()}</td>
                   </tr>

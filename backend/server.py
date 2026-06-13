@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Header, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +6,18 @@ import os
 import logging
 import uuid
 import httpx
+import secrets
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+from emails import send_waitlist_confirmation, send_task_assigned, send_payment_cleared  # noqa: E402
+from storage import put_object, get_object, init_storage, MIME_TYPES  # noqa: E402
 
 
 ROOT_DIR = Path(__file__).parent
@@ -78,6 +86,8 @@ class SubmissionCreate(BaseModel):
     task_id: str
     submission_text: str
     submission_url: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
 
 
 class Submission(BaseModel):
@@ -89,6 +99,8 @@ class Submission(BaseModel):
     client_id: str
     submission_text: str
     submission_url: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     status: str = "pending"  # pending, approved, rejected
     feedback: Optional[str] = None
     payment_status: str = "unpaid"  # unpaid, paid
@@ -100,6 +112,7 @@ class WaitlistEntry(BaseModel):
     email: EmailStr
     role: str  # 'worker' | 'client'
     interest: Optional[str] = None
+    ref: Optional[str] = None  # referral code of the inviter
 
 
 class FeedbackEntry(BaseModel):
@@ -253,6 +266,8 @@ async def list_tasks(
     status: Optional[str] = None,
     category: Optional[str] = None,
     mine: Optional[str] = None,  # 'posted' | 'assigned' | 'completed'
+    q: Optional[str] = None,
+    sort: Optional[str] = "newest",  # newest | budget_desc | budget_asc | deadline
     user: User = Depends(get_current_user),
 ):
     query = {}
@@ -267,7 +282,21 @@ async def list_tasks(
     elif mine == "completed":
         query["assigned_to"] = user.user_id
         query["status"] = "completed"
-    tasks = await db.tasks.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    if q:
+        query["$or"] = [
+            {"title": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}},
+            {"category": {"$regex": q, "$options": "i"}},
+        ]
+
+    sort_map = {
+        "newest": ("created_at", -1),
+        "budget_desc": ("budget", -1),
+        "budget_asc": ("budget", 1),
+        "deadline": ("deadline", 1),
+    }
+    sort_field, sort_dir = sort_map.get(sort or "newest", ("created_at", -1))
+    tasks = await db.tasks.find(query, {"_id": 0}).sort(sort_field, sort_dir).to_list(500)
     return tasks
 
 
@@ -331,6 +360,7 @@ async def apply_to_task(task_id: str, user: User = Depends(get_current_user)):
             {"task_id": task_id},
             {"$addToSet": {"applicants": user.user_id}},
         )
+        return {"ok": True, "assigned": False}
     else:
         await db.tasks.update_one(
             {"task_id": task_id},
@@ -343,7 +373,9 @@ async def apply_to_task(task_id: str, user: User = Depends(get_current_user)):
                 "$addToSet": {"applicants": user.user_id},
             },
         )
-    return {"ok": True}
+        # Fire-and-forget assignment email
+        asyncio.create_task(send_task_assigned(user.name, user.email, task["title"], task["deadline"]))
+        return {"ok": True, "assigned": True}
 
 
 # ============== SUBMISSIONS ==============
@@ -363,6 +395,8 @@ async def create_submission(payload: SubmissionCreate, user: User = Depends(get_
         "client_id": task["client_id"],
         "submission_text": payload.submission_text,
         "submission_url": payload.submission_url,
+        "file_path": payload.file_path,
+        "file_name": payload.file_name,
         "status": "pending",
         "feedback": None,
         "payment_status": "unpaid",
@@ -411,7 +445,7 @@ async def review_submission(
             {"submission_id": submission_id},
             {"$set": {"status": "approved", "feedback": feedback}},
         )
-        # Mark task completed, update worker earnings + client spent
+        # Mark task completed, update worker earnings + client spent, award skill badge
         task = await db.tasks.find_one({"task_id": sub["task_id"]}, {"_id": 0})
         if task:
             await db.tasks.update_one(
@@ -425,6 +459,27 @@ async def review_submission(
                 {"user_id": sub["client_id"]},
                 {"$inc": {"spent": task["budget"]}},
             )
+            # Award / increment skill badge
+            await db.badges.update_one(
+                {"user_id": sub["worker_id"], "category": task["category"]},
+                {
+                    "$inc": {"completed_count": 1, "total_earned": task["budget"]},
+                    "$set": {"last_at": datetime.now(timezone.utc).isoformat()},
+                    "$setOnInsert": {
+                        "badge_id": f"bdg_{uuid.uuid4().hex[:10]}",
+                        "user_id": sub["worker_id"],
+                        "category": task["category"],
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                },
+                upsert=True,
+            )
+            # Email the worker
+            worker = await db.users.find_one({"user_id": sub["worker_id"]}, {"_id": 0})
+            if worker:
+                asyncio.create_task(send_payment_cleared(
+                    worker["name"], worker["email"], task["title"], task["budget"]
+                ))
     elif action == "reject":
         await db.submissions.update_one(
             {"submission_id": submission_id},
@@ -517,22 +572,123 @@ async def admin_feedback(user: User = Depends(require_admin)):
     return items
 
 
+# ============== FILES / UPLOADS ==============
+@api_router.post("/upload")
+async def upload_file(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    """Upload a file (work submission attachment). Returns storage path + filename."""
+    data = await file.read()
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 25MB)")
+    ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin")
+    content_type = file.content_type or MIME_TYPES.get(ext, "application/octet-stream")
+    path = f"sidequest/uploads/{user.user_id}/{uuid.uuid4().hex}.{ext}"
+    try:
+        result = put_object(path, data, content_type)
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+    await db.files.insert_one({
+        "file_id": f"file_{uuid.uuid4().hex[:12]}",
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": content_type,
+        "size": result.get("size", len(data)),
+        "uploaded_by": user.user_id,
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"path": result["path"], "filename": file.filename, "size": result.get("size", len(data))}
+
+
+@api_router.get("/files/download")
+async def download_file(path: str, user: User = Depends(get_current_user)):
+    """Stream a file by storage path. Worker who uploaded or related client/admin can access."""
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    # Authorization: uploader, admin, or a related submission's client/worker
+    allowed = user.role == "admin" or record["uploaded_by"] == user.user_id
+    if not allowed:
+        sub = await db.submissions.find_one({"file_path": path}, {"_id": 0})
+        if sub and (sub["client_id"] == user.user_id or sub["worker_id"] == user.user_id):
+            allowed = True
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    try:
+        data, content_type = get_object(path)
+    except Exception as e:
+        logger.error(f"Download failed: {e}")
+        raise HTTPException(status_code=500, detail="Download failed")
+    return Response(content=data, media_type=record.get("content_type", content_type))
+
+
+# ============== BADGES ==============
+@api_router.get("/badges")
+async def list_badges(user: User = Depends(get_current_user)):
+    badges = await db.badges.find({"user_id": user.user_id}, {"_id": 0}).to_list(100)
+    # Compute level from completed_count: 1 (1-2), 2 (3-5), 3 (6-10), 4 (11-24), 5 (25+)
+    for b in badges:
+        c = b.get("completed_count", 0)
+        b["level"] = 5 if c >= 25 else 4 if c >= 11 else 3 if c >= 6 else 2 if c >= 3 else 1
+    return badges
+
+
 # ============== WAITLIST / FEEDBACK (PUBLIC) ==============
 @api_router.post("/waitlist")
 async def join_waitlist(payload: WaitlistEntry):
+    # Generate unique referral code for this user
+    ref_code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].upper()
+    while await db.waitlist.find_one({"referral_code": ref_code}):
+        ref_code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].upper()
+
+    # Resolve inviter
+    referred_by = None
+    if payload.ref:
+        inviter = await db.waitlist.find_one({"referral_code": payload.ref.upper()})
+        if inviter:
+            referred_by = inviter["waitlist_id"]
+            await db.waitlist.update_one(
+                {"waitlist_id": inviter["waitlist_id"]},
+                {"$inc": {"referrals_count": 1}},
+            )
+
+    exists = await db.waitlist.find_one({"email": payload.email}, {"_id": 0})
+    if exists:
+        base = os.environ.get("APP_BASE_URL", "")
+        return {
+            "ok": True,
+            "already": True,
+            "referral_code": exists.get("referral_code"),
+            "referral_link": f"{base}/?ref={exists.get('referral_code')}" if exists.get("referral_code") else None,
+        }
+
     entry = {
         "waitlist_id": f"wl_{uuid.uuid4().hex[:12]}",
         "name": payload.name,
         "email": payload.email,
         "role": payload.role,
         "interest": payload.interest,
+        "referral_code": ref_code,
+        "referred_by": referred_by,
+        "referrals_count": 0,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    exists = await db.waitlist.find_one({"email": payload.email})
-    if exists:
-        return {"ok": True, "already": True}
     await db.waitlist.insert_one(entry)
-    return {"ok": True}
+
+    base = os.environ.get("APP_BASE_URL", "")
+    referral_link = f"{base}/?ref={ref_code}" if base else f"?ref={ref_code}"
+    # Fire-and-forget welcome email
+    asyncio.create_task(send_waitlist_confirmation(payload.name, payload.email, referral_link))
+
+    return {"ok": True, "referral_code": ref_code, "referral_link": referral_link}
+
+
+@api_router.get("/waitlist/leaderboard")
+async def waitlist_leaderboard(limit: int = 10):
+    items = await db.waitlist.find(
+        {"referrals_count": {"$gt": 0}}, {"_id": 0, "email": 0}
+    ).sort("referrals_count", -1).limit(limit).to_list(limit)
+    return items
 
 
 @api_router.post("/feedback")
@@ -688,6 +844,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    # Init object storage (no-op if no key — logs warning)
+    try:
+        init_storage()
+    except Exception as e:
+        logger.warning(f"Storage init failed (uploads will be disabled): {e}")
     # Auto-seed on first boot for MVP demo experience
     try:
         existing = await db.tasks.count_documents({})

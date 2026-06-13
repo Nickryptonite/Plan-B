@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { TopBar } from "../components/TopBar";
@@ -7,7 +7,7 @@ import { CATEGORIES, CATEGORY_ACCENTS } from "../constants";
 import { API } from "../auth";
 import {
   Lightning, Rocket, Target, Coins, Sparkle, CheckCircle, Question, Briefcase,
-  GraduationCap, ArrowRight, Star, MagnifyingGlass, CaretDown,
+  GraduationCap, ArrowRight, Star, MagnifyingGlass, CaretDown, Copy,
 } from "@phosphor-icons/react";
 
 const HOW_IT_WORKS = [
@@ -40,27 +40,47 @@ const FAQS = [
 
 export default function Landing() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitForm, setWaitForm] = useState({ name: "", email: "", role: "worker", interest: "" });
   const [submitting, setSubmitting] = useState(false);
   const [openFaq, setOpenFaq] = useState(0);
+  const [referralResult, setReferralResult] = useState(null);
+  const refCode = searchParams.get("ref");
+
+  useEffect(() => {
+    if (refCode) {
+      // Auto-open waitlist for referred visitors
+      toast.success(`You were invited! Sign up to credit your friend.`);
+    }
+  }, [refCode]);
 
   const submitWaitlist = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await axios.post(`${API}/waitlist`, waitForm);
+      const res = await axios.post(`${API}/waitlist`, { ...waitForm, ref: refCode || undefined });
       if (res.data.already) {
-        toast.success("You're already on the list! We'll be in touch.");
+        toast.success("You're already on the list! Here's your referral link.");
       } else {
         toast.success("You're in. Welcome to SideQuest 🎉");
       }
+      setReferralResult({
+        code: res.data.referral_code,
+        link: res.data.referral_link,
+      });
       setWaitForm({ name: "", email: "", role: "worker", interest: "" });
-      setWaitlistOpen(false);
     } catch (e) {
       toast.error("Could not join waitlist. Try again?");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const copyReferral = () => {
+    if (referralResult?.link) {
+      navigator.clipboard.writeText(referralResult.link);
+      toast.success("Copied! Share it with your friends.");
     }
   };
 
@@ -370,67 +390,85 @@ export default function Landing() {
 
       {/* WAITLIST MODAL */}
       {waitlistOpen && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setWaitlistOpen(false)}>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setWaitlistOpen(false); setReferralResult(null); }}>
           <div className="sq-card bg-white p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <span className="sq-label text-[#FF5A5F]">Waitlist</span>
-                <h3 className="sq-h2 mt-1">Join the squad</h3>
+                <h3 className="sq-h2 mt-1">{referralResult ? "You're in! 🎉" : "Join the squad"}</h3>
               </div>
-              <button onClick={() => setWaitlistOpen(false)} className="text-2xl font-bold" data-testid="waitlist-close-btn">×</button>
+              <button onClick={() => { setWaitlistOpen(false); setReferralResult(null); }} className="text-2xl font-bold" data-testid="waitlist-close-btn">×</button>
             </div>
-            <form onSubmit={submitWaitlist} className="space-y-3">
-              <input
-                required
-                placeholder="Your name"
-                value={waitForm.name}
-                onChange={(e) => setWaitForm({ ...waitForm, name: e.target.value })}
-                className="sq-input"
-                data-testid="waitlist-name-input"
-              />
-              <input
-                required
-                type="email"
-                placeholder="you@college.edu"
-                value={waitForm.email}
-                onChange={(e) => setWaitForm({ ...waitForm, email: e.target.value })}
-                className="sq-input"
-                data-testid="waitlist-email-input"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setWaitForm({ ...waitForm, role: "worker" })}
-                  className={`flex-1 sq-btn ${waitForm.role === "worker" ? "sq-btn-primary" : "sq-btn-secondary"}`}
-                  data-testid="waitlist-role-worker"
-                >
-                  Worker
+            {referralResult ? (
+              <div data-testid="referral-result">
+                <p className="text-slate-700 mb-3">Share your referral link — top referrers get priority access + a Founding Member badge.</p>
+                <div className="sq-card p-3 bg-[#FACC15] mb-3 font-mono text-xs break-all" data-testid="referral-link">
+                  {referralResult.link}
+                </div>
+                <button onClick={copyReferral} className="sq-btn sq-btn-primary w-full" data-testid="copy-referral-btn">
+                  <Copy size={16} weight="bold" /> Copy link
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setWaitForm({ ...waitForm, role: "client" })}
-                  className={`flex-1 sq-btn ${waitForm.role === "client" ? "sq-btn-primary" : "sq-btn-secondary"}`}
-                  data-testid="waitlist-role-client"
-                >
-                  Client
+                <button onClick={() => { setWaitlistOpen(false); setReferralResult(null); }} className="sq-btn sq-btn-secondary w-full mt-2" data-testid="close-referral-btn">
+                  Done
                 </button>
               </div>
-              <textarea
-                placeholder="What kind of tasks excite you? (optional)"
-                value={waitForm.interest}
-                onChange={(e) => setWaitForm({ ...waitForm, interest: e.target.value })}
-                className="sq-input min-h-[80px]"
-                data-testid="waitlist-interest-input"
-              />
-              <button
-                type="submit"
-                disabled={submitting}
-                className="sq-btn sq-btn-primary w-full"
-                data-testid="waitlist-submit-btn"
-              >
-                {submitting ? "Joining..." : "Count me in"}
-              </button>
-            </form>
+            ) : (
+              <form onSubmit={submitWaitlist} className="space-y-3">
+                {refCode && (
+                  <div className="sq-chip bg-[#A7F3D0] text-xs">Invited via code: {refCode}</div>
+                )}
+                <input
+                  required
+                  placeholder="Your name"
+                  value={waitForm.name}
+                  onChange={(e) => setWaitForm({ ...waitForm, name: e.target.value })}
+                  className="sq-input"
+                  data-testid="waitlist-name-input"
+                />
+                <input
+                  required
+                  type="email"
+                  placeholder="you@college.edu"
+                  value={waitForm.email}
+                  onChange={(e) => setWaitForm({ ...waitForm, email: e.target.value })}
+                  className="sq-input"
+                  data-testid="waitlist-email-input"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWaitForm({ ...waitForm, role: "worker" })}
+                    className={`flex-1 sq-btn ${waitForm.role === "worker" ? "sq-btn-primary" : "sq-btn-secondary"}`}
+                    data-testid="waitlist-role-worker"
+                  >
+                    Worker
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWaitForm({ ...waitForm, role: "client" })}
+                    className={`flex-1 sq-btn ${waitForm.role === "client" ? "sq-btn-primary" : "sq-btn-secondary"}`}
+                    data-testid="waitlist-role-client"
+                  >
+                    Client
+                  </button>
+                </div>
+                <textarea
+                  placeholder="What kind of tasks excite you? (optional)"
+                  value={waitForm.interest}
+                  onChange={(e) => setWaitForm({ ...waitForm, interest: e.target.value })}
+                  className="sq-input min-h-[80px]"
+                  data-testid="waitlist-interest-input"
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="sq-btn sq-btn-primary w-full"
+                  data-testid="waitlist-submit-btn"
+                >
+                  {submitting ? "Joining..." : "Count me in"}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

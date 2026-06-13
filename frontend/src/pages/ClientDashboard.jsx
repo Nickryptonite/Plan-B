@@ -6,7 +6,7 @@ import { TaskCard, formatINR } from "../components/TaskCard";
 import { Modal } from "./WorkerDashboard";
 import { API, useAuth } from "../auth";
 import { CATEGORIES } from "../constants";
-import { Briefcase, CheckCircle, CurrencyInr, ListPlus, ClipboardText } from "@phosphor-icons/react";
+import { Briefcase, CheckCircle, CurrencyInr, ListPlus, ClipboardText, Paperclip } from "@phosphor-icons/react";
 
 const Stat = ({ label, value, icon: Icon, color }) => (
   <div className="sq-card p-5">
@@ -213,7 +213,18 @@ const ReviewModal = ({ sub, onClose, onReview }) => {
         <p className="text-slate-800 whitespace-pre-line">{sub.submission_text}</p>
         {sub.submission_url && (
           <a href={sub.submission_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#FF5A5F] font-bold mt-3 text-sm underline">
-            View work →
+            View work link →
+          </a>
+        )}
+        {sub.file_path && (
+          <a
+            href={`${API}/files/download?path=${encodeURIComponent(sub.file_path)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 mt-3 px-3 py-2 sq-chip bg-[#FACC15]"
+            data-testid="review-file-download"
+          >
+            <Paperclip size={14} weight="bold" /> {sub.file_name || "Download attachment"}
           </a>
         )}
       </div>
