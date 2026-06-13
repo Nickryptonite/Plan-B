@@ -36,6 +36,17 @@ Build a modern, mobile-first web app ("Plan B" — branded as SideQuest) that he
 - **Referral system**: every waitlist signup gets a unique 8-char code + shareable link, `?ref=` recognized on landing, `referrals_count` incremented on each redemption, leaderboard endpoint, admin table shows referrals.
 - 50/50 backend tests passing (22 new + 28 regression).
 
+### Iteration 3 (Feb 13, 2026) — CTO Hardening Pass
+- **Worker Reliability Score** — full system: `tasks_accepted`, `tasks_completed`, `tasks_rejected`, `on_time_completions` counters tracked atomically (`$inc`). Computed: `approval_rate`, `on_time_rate`, `trust_level` (new → rising → trusted → verified), `reliability_score` (0-100).
+- **Realistic seed data**: 20 workers (real Indian college emails), 10 clients, 50 tasks across 11 categories, 30 submissions with mix of statuses, 15 skill badges, 6 waitlist entries — generated deterministically with `random.seed(42)`.
+- **Input validation** via Pydantic field validators on TaskCreate (title 5-200, desc 10-2000, budget >0 ≤1M, deadline ≥ today, category whitelisted), SubmissionCreate (text 5-5000), RoleUpdate (worker|client only, bio ≤500).
+- **Admin Analytics tab**: dedicated page with 6 mini-stats (total users/workers/clients/tasks/completion %/pending reviews), task funnel, submission quality funnel, top reliable workers list.
+- **Public user profile endpoint**: `GET /api/users/{id}/public` — any authed user can fetch trust + reliability of any other user (used by client review modal).
+- **Production hardening**: `/api/seed?force=true` admin-gated; `review_submission` returns 400 if already reviewed; duplicate `load_dotenv` removed.
+- **Empty states** improved on all worker/client tabs with explicit CTAs.
+- **68/68 backend tests passing** (28 regression + 22 iter2 + 18 iter3).
+- Test docs: `/app/TESTING_CHECKLIST.md` (full QA checklist) + `/app/MVP_READINESS.md` (validation report).
+
 ## Backlog
 ### P0 (next iteration)
 - Pin CORS to actual origin (prod hardening).

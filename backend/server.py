@@ -929,15 +929,13 @@ async def submit_feedback(payload: FeedbackEntry):
 
 
 # ============== SEED ==============
-@api_router.post("/seed")
-async def seed_data(force: bool = False):
-    """Seed demo data. Idempotent unless ?force=true (clears + reseeds)."""
+async def _seed_internal(force: bool = False):
+    """Internal seed (no auth). Returns dict result."""
     existing = await db.tasks.count_documents({})
     if existing > 0 and not force:
         return {"ok": True, "already_seeded": True}
 
     if force:
-        # Only wipe demo data, leave non-demo users untouched
         await db.users.delete_many({"user_id": {"$regex": "^user_demo_"}})
         await db.tasks.delete_many({"task_id": {"$regex": "^task_demo_"}})
         await db.submissions.delete_many({"submission_id": {"$regex": "^sub_demo_"}})
@@ -964,6 +962,16 @@ async def seed_data(force: bool = False):
             "waitlist": len(waitlist),
         },
     }
+
+
+@api_router.post("/seed")
+async def seed_data(request: Request, force: bool = False, authorization: Optional[str] = Header(None)):
+    """Seed demo data. Idempotent unless ?force=true (admin only, clears + reseeds)."""
+    if force:
+        user = await get_current_user(request, authorization)
+        if user.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+    return await _seed_internal(force=force)
 
 
 # ============== HEALTH ==============
@@ -994,7 +1002,7 @@ async def startup():
     try:
         existing = await db.tasks.count_documents({})
         if existing == 0:
-            await seed_data()
+            await _seed_internal()
             logger.info("Seeded demo data on startup")
     except Exception as e:
         logger.warning(f"Seed on startup failed: {e}")
