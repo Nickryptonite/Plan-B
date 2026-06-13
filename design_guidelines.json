@@ -1,0 +1,111 @@
+{
+  "theme_and_archetype": {
+    "theme": "light",
+    "archetype": "3 (Pastel & Soft) blended with Neo-Brutalist Structural Elements",
+    "reasoning": "The target audience is Gen Z (students, freshers) and startups. The app needs to feel trustworthy, approachable, and youthful. Combining a soft pastel base (Archetype 3) with rigid, high-contrast borders (Neo-Brutalist) creates a 'Pastel-Brutalist' aesthetic that is highly engaging, modern, and distinct from typical SaaS."
+  },
+  "typography": {
+    "headings": {
+      "font_family": "Outfit",
+      "weights": ["600", "800", "900"],
+      "styling": "tracking-tight, uppercase for labels (tracking-[0.2em])",
+      "reasoning": "Outfit provides a geometric, modern, and friendly voice that avoids the generic feel of Inter/Roboto."
+    },
+    "body": {
+      "font_family": "Plus Jakarta Sans",
+      "weights": ["400", "500", "600"],
+      "styling": "leading-relaxed",
+      "reasoning": "Highly legible for data-heavy dashboard tables and clear for task descriptions, complementing Outfit perfectly."
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-extrabold",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "h4": "text-lg sm:text-xl font-bold",
+      "body": "text-base",
+      "small": "text-sm"
+    }
+  },
+  "color_palette": {
+    "base": {
+      "background": "#FFFDF9",
+      "surface": "#FFFFFF",
+      "border": "#0F172A",
+      "text_primary": "#0F172A",
+      "text_secondary": "#475569"
+    },
+    "brand": {
+      "primary": "#FF5A5F",
+      "primary_hover": "#E0484D",
+      "secondary": "#10B981",
+      "accent": "#FACC15"
+    },
+    "status": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "error": "#EF4444",
+      "info": "#3B82F6"
+    },
+    "neo_brutalist_accents": {
+      "lavender": "#C4B5FD",
+      "peach": "#FFDAB9",
+      "mint": "#A7F3D0",
+      "sky": "#BAE6FD"
+    }
+  },
+  "spacing_and_layout": {
+    "spacing_scale": "Use generous padding: p-6, p-8, p-12. Containers must have internal padding to prevent text collision.",
+    "landing_grid": "Mode A: 'Tetris' Grid for features. Asymmetrical layout mixing col-span-4 and col-span-8. Deep gaps (gap-8).",
+    "dashboard_grid": "Mode B: 'Control Room'. Dense. grid-cols-1 md:grid-cols-4. gap-6. Clear North Star metrics on top left.",
+    "borders_and_shadows": {
+      "border": "2px solid #0F172A (CRITICAL: everywhere on cards, inputs, buttons)",
+      "shadow": "Hard block shadow: shadow-[4px_4px_0px_#0F172A]",
+      "radius": "rounded-xl (sharp enough for structure, round enough for friendly vibe)"
+    }
+  },
+  "component_rules": {
+    "buttons": "bg-primary text-white border-2 border-slate-900 rounded-xl shadow-[4px_4px_0px_#0F172A] hover:translate-y-1 hover:shadow-[2px_2px_0px_#0F172A] transition-all font-bold px-6 py-3",
+    "cards": "bg-white border-2 border-slate-900 rounded-xl p-6 shadow-[4px_4px_0px_#0F172A] hover:-translate-y-1 hover:shadow-[6px_6px_0px_#0F172A] transition-transform",
+    "inputs": "bg-white border-2 border-slate-900 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:outline-none",
+    "badges": "px-3 py-1 text-xs font-bold uppercase tracking-wider border-2 border-slate-900 rounded-full",
+    "marquee": "Use for 'Task Categories'. Font: Outfit, text-4xl outline-text. Fast, smooth drift."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Tactile 'push' effect. Elements move down/right slightly, shadow reduces to simulate pressing.",
+    "page_transitions": "None to keep it snappy. Micro-interactions on buttons, cards, and inputs are priority.",
+    "accessibility": "Prefers-reduced-motion respected. Strict contrast ratio maintained by the 2px dark borders and dark text."
+  },
+  "icons_and_assets": {
+    "icon_library": "@phosphor-icons/react",
+    "icon_weight": "bold",
+    "visual_decorations": "SVG starbursts, abstract shapes (using the pastel accent colors) overlapping the brutalist borders. Sticker-like tags."
+  },
+  "images": {
+    "hero": [
+      {
+        "url": "https://images.unsplash.com/photo-1515378960530-7c0da6231fb1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxjb2xsZWdlJTIwc3R1ZGVudCUyMHdvcmtpbmclMjBsYXB0b3B8ZW58MHx8fHwxNzgxMzI5MjY3fDA&ixlib=rb-4.1.0&q=85",
+        "category": "Hero Section",
+        "description": "Student working on a laptop, perfect for worker landing page representation."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1559136555-9303baea8ebd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwxfHxzdGFydHVwJTIwdGVhbSUyMG1lZXRpbmclMjBtb2Rlcm4lMjBvZmZpY2V8ZW58MHx8fHwxNzgxMzI5MjY3fDA&ixlib=rb-4.1.0&q=85",
+        "category": "Client Section",
+        "description": "Startup team in a modern office, representing clients posting tasks."
+      }
+    ],
+    "logos": [
+      {
+        "url": "https://images.unsplash.com/photo-1496200186974-4293800e2c20?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwzfHxjb21wYW55JTIwbG9nb3xlbnwwfHx8fDE3ODEzMjkyNzh8MA&ixlib=rb-4.1.0&q=85",
+        "category": "Client / Partner Logo",
+        "description": "Slack logo placeholder for trusted companies section."
+      },
+      {
+        "url": "https://images.pexels.com/photos/21898300/pexels-photo-21898300.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Client / Partner Logo",
+        "description": "Pexels logo placeholder for trusted companies section."
+      }
+    ]
+  },
+  "testing_requirements": "All interactive and key informational elements MUST include a data-testid attribute. Convention: kebab-case, role-based. Example: data-testid='submit-work-button'",
+  "instructions_to_main_agent": "Implement a pastel neo-brutalist aesthetic using .js files (not .tsx). Use Outfit for headings and Plus Jakarta Sans for body. Do not use generic Shadcn styling; override borders to be 2px solid #0F172A and add hard drop shadows (e.g., shadow-[4px_4px_0px_#0F172A]) to buttons and cards to create the tactile, Gen Z-friendly look. Ensure the hero image does not get obscured by a completely flat dark overlay. Integrate the specified data-testid tags on all interactive elements. Install @phosphor-icons/react."
+}
