@@ -2,10 +2,10 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { TopBar } from "../components/TopBar";
-import { Modal } from "./WorkerDashboard";
+import { Modal, TrustBadge } from "./WorkerDashboard";
 import { API, useAuth } from "../auth";
 import { formatINR } from "../components/TaskCard";
-import { Users, Briefcase, ClipboardText, Coins, ChartBar, EnvelopeSimple } from "@phosphor-icons/react";
+import { Users, Briefcase, ClipboardText, Coins, ChartBar, EnvelopeSimple, ShieldCheck, Trophy } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell,
 } from "recharts";
@@ -22,12 +22,35 @@ const Stat = ({ label, value, icon: Icon, color }) => (
   </div>
 );
 
+const MiniStat = ({ label, value, bg, testid }) => (
+  <div className="border-2 border-slate-900 rounded-xl p-4" style={{ backgroundColor: bg, boxShadow: "3px 3px 0px #0F172A" }} data-testid={testid}>
+    <div className="sq-label text-slate-700">{label}</div>
+    <div className="text-2xl font-black mt-1" style={{ fontFamily: "Outfit" }}>{value}</div>
+  </div>
+);
+
+const Funnel = ({ label, value, total, color }) => {
+  const pct = total > 0 ? (value / total) * 100 : 0;
+  return (
+    <div className="mb-3">
+      <div className="flex justify-between text-sm mb-1">
+        <span className="font-semibold">{label}</span>
+        <span className="text-slate-600">{value} <span className="text-xs">({pct.toFixed(0)}%)</span></span>
+      </div>
+      <div className="h-3 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden">
+        <div className="h-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+};
+
 const COLORS = ["#FF5A5F", "#10B981", "#FACC15", "#C4B5FD", "#BAE6FD", "#FFDAB9", "#A7F3D0", "#F59E0B"];
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState("overview");
   const [stats, setStats] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [users, setUsers] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [allSubs, setAllSubs] = useState([]);
@@ -37,8 +60,9 @@ export default function AdminDashboard() {
 
   const loadAll = async () => {
     try {
-      const [s, u, t, sub, w, fb] = await Promise.all([
+      const [s, an, u, t, sub, w, fb] = await Promise.all([
         axios.get(`${API}/admin/stats`),
+        axios.get(`${API}/admin/analytics`),
         axios.get(`${API}/admin/users`),
         axios.get(`${API}/tasks`),
         axios.get(`${API}/submissions`),
@@ -46,6 +70,7 @@ export default function AdminDashboard() {
         axios.get(`${API}/admin/feedback`),
       ]);
       setStats(s.data);
+      setAnalytics(an.data);
       setUsers(u.data);
       setAllTasks(t.data);
       setAllSubs(sub.data);
@@ -108,7 +133,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          {["overview", "users", "tasks", "submissions", "payments", "waitlist", "feedback"].map((t) => (
+          {["overview", "analytics", "users", "tasks", "submissions", "payments", "waitlist", "feedback"].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -119,6 +144,67 @@ export default function AdminDashboard() {
             </button>
           ))}
         </div>
+
+        {tab === "analytics" && analytics && (
+          <div className="space-y-6" data-testid="admin-analytics">
+            <div>
+              <span className="sq-label text-[#FF5A5F]">Platform metrics</span>
+              <h3 className="sq-h3 mt-1 mb-3">Validation snapshot</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <MiniStat label="Total Users" value={analytics.total_users} bg="#C4B5FD" testid="metric-total-users" />
+                <MiniStat label="Workers" value={analytics.workers} bg="#A7F3D0" testid="metric-workers" />
+                <MiniStat label="Clients" value={analytics.clients} bg="#FFDAB9" testid="metric-clients" />
+                <MiniStat label="Total Tasks" value={analytics.total_tasks} bg="#BAE6FD" testid="metric-tasks" />
+                <MiniStat label="Completion" value={`${analytics.completion_rate}%`} bg="#FACC15" testid="metric-completion" />
+                <MiniStat label="Pending Reviews" value={analytics.pending_submissions} bg="#FCA5A5" testid="metric-pending" />
+              </div>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div className="sq-card p-6">
+                <h3 className="sq-h3 mb-4">Task funnel</h3>
+                <Funnel label="Open" value={analytics.open_tasks} total={analytics.total_tasks} color="#10B981" />
+                <Funnel label="Assigned" value={analytics.assigned_tasks} total={analytics.total_tasks} color="#3B82F6" />
+                <Funnel label="In review" value={analytics.in_review_tasks} total={analytics.total_tasks} color="#F59E0B" />
+                <Funnel label="Completed" value={analytics.completed_tasks} total={analytics.total_tasks} color="#0F172A" />
+              </div>
+              <div className="sq-card p-6">
+                <h3 className="sq-h3 mb-4">Submission quality</h3>
+                <Funnel label="Approved" value={analytics.approved_submissions} total={analytics.total_submissions} color="#10B981" />
+                <Funnel label="Pending" value={analytics.pending_submissions} total={analytics.total_submissions} color="#FACC15" />
+                <Funnel label="Rejected" value={analytics.rejected_submissions} total={analytics.total_submissions} color="#EF4444" />
+                <div className="mt-4 pt-4 border-t-2 border-dashed border-slate-300 text-sm">
+                  <span className="text-slate-500">Platform approval rate: </span>
+                  <span className="font-black text-lg" style={{ fontFamily: "Outfit" }}>{analytics.submission_approval_rate}%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="sq-card p-6">
+              <h3 className="sq-h3 mb-4 flex items-center gap-2"><Trophy size={20} weight="fill" className="text-[#FACC15]" /> Top reliable workers</h3>
+              {(analytics.top_workers || []).length === 0 ? (
+                <p className="text-slate-500 text-sm">No worker has completed a task yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {analytics.top_workers.map((w, idx) => (
+                    <div key={w.user_id} className="flex items-center gap-3 p-3 border-2 border-slate-900 rounded-lg bg-[#FFFDF9]" data-testid={`top-worker-${idx}`}>
+                      <div className="w-8 h-8 rounded-full bg-[#FF5A5F] text-white border-2 border-slate-900 flex items-center justify-center font-black text-sm">{idx + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm truncate" style={{ fontFamily: "Outfit" }}>{w.name}</div>
+                        <div className="text-xs text-slate-500">{w.tasks_completed} task{w.tasks_completed !== 1 ? "s" : ""} • {formatINR(w.earnings)} earned</div>
+                      </div>
+                      <TrustBadge level={w.trust_level} />
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500">Score</div>
+                        <div className="font-black text-lg" style={{ fontFamily: "Outfit" }}>{w.reliability_score}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {tab === "overview" && (
           <div className="grid lg:grid-cols-2 gap-6">
@@ -165,15 +251,19 @@ export default function AdminDashboard() {
               <thead className="border-b-2 border-slate-900">
                 <tr className="text-left">
                   <th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Role</th>
-                  <th className="p-3">Earnings</th><th className="p-3">Spent</th><th className="p-3">Action</th>
+                  <th className="p-3">Trust</th><th className="p-3">Score</th><th className="p-3">Done</th>
+                  <th className="p-3">Earnings</th><th className="p-3">Spent</th><th className="p-3">Set role</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.user_id} className="border-b border-slate-200" data-testid={`user-row-${u.user_id}`}>
                     <td className="p-3 font-semibold">{u.name}</td>
-                    <td className="p-3 text-slate-600">{u.email}</td>
-                    <td className="p-3"><span className="sq-badge bg-[#FACC15]">{u.role || "—"}</span></td>
+                    <td className="p-3 text-slate-600 text-xs">{u.email}</td>
+                    <td className="p-3"><span className="sq-badge bg-[#FACC15] text-xs">{u.role || "—"}</span></td>
+                    <td className="p-3">{u.role === "worker" ? <TrustBadge level={u.trust_level} /> : "—"}</td>
+                    <td className="p-3">{u.role === "worker" ? <span className="font-bold">{u.reliability_score}</span> : "—"}</td>
+                    <td className="p-3">{u.role === "worker" ? u.tasks_completed : "—"}</td>
                     <td className="p-3">{formatINR(u.earnings)}</td>
                     <td className="p-3">{formatINR(u.spent)}</td>
                     <td className="p-3">

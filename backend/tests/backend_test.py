@@ -180,7 +180,7 @@ class TestClient:
             "description": "Need a logo",
             "category": "Canva Design",
             "budget": 500.0,
-            "deadline": "2026-04-01",
+            "deadline": "2027-04-01",
             "required_skills": ["Canva Design"],
         })
         assert r.status_code == 200, r.text
@@ -224,13 +224,15 @@ class TestClient:
     def test_reject_flow(self, worker2_token, client_token):
         # Create task, w2 applies+submits, client rejects
         r = requests.post(f"{API}/tasks", headers=_auth(client_token), json={
-            "title": "TEST_Task Reject", "description": "x", "category": "Research",
-            "budget": 100.0, "deadline": "2026-04-10", "required_skills": []
+            "title": "TEST_Task Reject Flow", "description": "Reject scenario test description.",
+            "category": "Research",
+            "budget": 100.0, "deadline": "2026-08-10", "required_skills": []
         })
+        assert r.status_code == 200, r.text
         tid = r.json()["task_id"]
         requests.post(f"{API}/tasks/{tid}/apply", headers=_auth(worker2_token))
         r = requests.post(f"{API}/submissions", headers=_auth(worker2_token), json={
-            "task_id": tid, "submission_text": "TEST_reject_me"
+            "task_id": tid, "submission_text": "TEST_reject_me please review"
         })
         sub_id = r.json()["submission_id"]
         r = requests.post(f"{API}/submissions/{sub_id}/review", headers=_auth(client_token), json={
@@ -293,8 +295,9 @@ class TestAdmin:
 class TestRoleEnforcement:
     def test_worker_cannot_post_task(self, worker_token):
         r = requests.post(f"{API}/tasks", headers=_auth(worker_token), json={
-            "title": "TEST nope", "description": "x", "category": "Research",
-            "budget": 100.0, "deadline": "2026-04-01", "required_skills": []
+            "title": "TEST_nope title", "description": "Should be blocked by role.",
+            "category": "Research",
+            "budget": 100.0, "deadline": "2026-08-01", "required_skills": []
         })
         assert r.status_code == 403
 

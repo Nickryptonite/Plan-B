@@ -5,7 +5,7 @@ import { TopBar } from "../components/TopBar";
 import { TaskCard, formatINR } from "../components/TaskCard";
 import { API, useAuth } from "../auth";
 import { CATEGORIES } from "../constants";
-import { Coins, CheckCircle, Briefcase, Sparkle, X, ArrowSquareOut, MagnifyingGlass, Trophy, Paperclip } from "@phosphor-icons/react";
+import { Coins, CheckCircle, Briefcase, Sparkle, X, ArrowSquareOut, MagnifyingGlass, Trophy, Paperclip, ShieldCheck, ChartLineUp, Clock } from "@phosphor-icons/react";
 
 const Stat = ({ label, value, icon: Icon, color = "#FACC15" }) => (
   <div className="sq-card p-5">
@@ -183,7 +183,18 @@ export default function WorkerDashboard() {
               ))}
             </div>
             {loading ? <p>Loading...</p> : tasks.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600">No tasks match. Try a different search or category.</div>
+              <div className="sq-card p-10 text-center" data-testid="empty-available">
+                <MagnifyingGlass size={40} weight="bold" className="mx-auto mb-3 text-slate-400" />
+                <h3 className="sq-h3 mb-2">No matching tasks</h3>
+                <p className="text-slate-600 mb-4">
+                  {query || category ? "Try clearing your search or category filter." : "New tasks drop daily — check back tomorrow."}
+                </p>
+                {(query || category) && (
+                  <button onClick={() => { setQuery(""); setCategory(""); }} className="sq-btn sq-btn-primary !px-4 !py-2 text-sm" data-testid="clear-filters-btn">
+                    Clear filters
+                  </button>
+                )}
+              </div>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {tasks.map((t) => (
@@ -197,7 +208,14 @@ export default function WorkerDashboard() {
         {tab === "assigned" && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {assigned.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600 col-span-full">No tasks assigned yet. Apply for one from the Available tab!</div>
+              <div className="sq-card p-10 text-center col-span-full" data-testid="empty-assigned">
+                <Briefcase size={40} weight="bold" className="mx-auto mb-3 text-slate-400" />
+                <h3 className="sq-h3 mb-2">No active quests yet</h3>
+                <p className="text-slate-600 mb-4">Head to the Available tab and apply to your first task!</p>
+                <button onClick={() => setTab("available")} className="sq-btn sq-btn-primary !px-4 !py-2 text-sm" data-testid="goto-available-btn">
+                  Browse tasks →
+                </button>
+              </div>
             ) : (
               assigned.map((t) => (
                 <TaskCard
@@ -215,7 +233,11 @@ export default function WorkerDashboard() {
         {tab === "history" && (
           <div className="space-y-3">
             {submissions.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600">No submissions yet. Finish a task!</div>
+              <div className="sq-card p-10 text-center" data-testid="empty-history">
+                <CheckCircle size={40} weight="bold" className="mx-auto mb-3 text-slate-400" />
+                <h3 className="sq-h3 mb-2">No submissions yet</h3>
+                <p className="text-slate-600">Once you submit work for a task, it'll show up here.</p>
+              </div>
             ) : (
               submissions.map((s) => (
                 <div key={s.submission_id} className="sq-card p-5 flex flex-wrap gap-4 justify-between items-center" data-testid={`submission-${s.submission_id}`}>
@@ -239,52 +261,62 @@ export default function WorkerDashboard() {
         )}
 
         {tab === "profile" && (
-          <div className="sq-card p-6 max-w-2xl">
-            <div className="flex items-center gap-4 mb-5">
-              {user?.picture ? (
-                <img src={user.picture} alt={user.name} className="w-20 h-20 rounded-full border-2 border-slate-900" />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-[#FACC15] border-2 border-slate-900 flex items-center justify-center text-3xl font-black">
-                  {user?.name?.[0]}
+          <div className="space-y-6 max-w-3xl">
+            <div className="sq-card p-6">
+              <div className="flex items-center gap-4 mb-5">
+                {user?.picture ? (
+                  <img src={user.picture} alt={user.name} className="w-20 h-20 rounded-full border-2 border-slate-900" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-[#FACC15] border-2 border-slate-900 flex items-center justify-center text-3xl font-black">
+                    {user?.name?.[0]}
+                  </div>
+                )}
+                <div>
+                  <h3 className="sq-h3">{user?.name}</h3>
+                  <p className="text-slate-600 text-sm">{user?.email}</p>
+                  {user?.trust_level && <TrustBadge level={user.trust_level} />}
                 </div>
-              )}
-              <div>
-                <h3 className="sq-h3">{user?.name}</h3>
-                <p className="text-slate-600 text-sm">{user?.email}</p>
+              </div>
+              {user?.bio && <p className="text-slate-700 mb-4">{user.bio}</p>}
+              <span className="sq-label text-slate-500">Your skills</span>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(user?.skills || []).length === 0 ? (
+                  <span className="text-sm text-slate-500">No skills selected yet.</span>
+                ) : (
+                  user.skills.map((s) => <span key={s} className="sq-chip bg-[#A7F3D0]">{s}</span>)
+                )}
               </div>
             </div>
-            {user?.bio && <p className="text-slate-700 mb-4">{user.bio}</p>}
-            <span className="sq-label text-slate-500">Your skills</span>
-            <div className="flex flex-wrap gap-2 mt-2 mb-5">
-              {(user?.skills || []).length === 0 ? (
-                <span className="text-sm text-slate-500">No skills selected yet.</span>
-              ) : (
-                user.skills.map((s) => <span key={s} className="sq-chip bg-[#A7F3D0]">{s}</span>)
-              )}
-            </div>
-            <span className="sq-label text-slate-500">Skill badges</span>
-            <div className="grid sm:grid-cols-2 gap-3 mt-2">
-              {badges.length === 0 ? (
-                <span className="text-sm text-slate-500">Complete tasks to unlock badges!</span>
-              ) : (
-                badges.map((b) => (
-                  <div key={b.category} className="sq-card p-4 bg-[#FFFDF9]" data-testid={`badge-${b.category.toLowerCase().replace(/\s+/g, "-")}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl border-2 border-slate-900 bg-[#FACC15] flex items-center justify-center">
-                        <Trophy size={24} weight="fill" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-sm" style={{ fontFamily: "Outfit" }}>{b.category}</div>
-                        <div className="text-xs text-slate-600">Level {b.level} • {b.completed_count} task{b.completed_count > 1 ? "s" : ""}</div>
-                      </div>
-                    </div>
-                    <div className="mt-3 h-2 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden">
-                      <div className="h-full bg-[#FF5A5F]" style={{ width: `${Math.min(100, (b.completed_count % 5) * 20 + 20)}%` }} />
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">{formatINR(b.total_earned || 0)} earned</div>
+
+            <ReliabilityCard user={user} />
+
+            <div className="sq-card p-6">
+              <span className="sq-label text-slate-500">Skill badges</span>
+              <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                {badges.length === 0 ? (
+                  <div className="text-sm text-slate-500 col-span-full">
+                    No badges yet. Complete your first task to unlock your first skill badge!
                   </div>
-                ))
-              )}
+                ) : (
+                  badges.map((b) => (
+                    <div key={b.category} className="sq-card p-4 bg-[#FFFDF9]" data-testid={`badge-${b.category.toLowerCase().replace(/\s+/g, "-")}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl border-2 border-slate-900 bg-[#FACC15] flex items-center justify-center">
+                          <Trophy size={24} weight="fill" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold text-sm" style={{ fontFamily: "Outfit" }}>{b.category}</div>
+                          <div className="text-xs text-slate-600">Level {b.level} • {b.completed_count} task{b.completed_count > 1 ? "s" : ""}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden">
+                        <div className="h-full bg-[#FF5A5F]" style={{ width: `${Math.min(100, (b.completed_count % 5) * 20 + 20)}%` }} />
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">{formatINR(b.total_earned || 0)} earned</div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -369,5 +401,64 @@ export const Modal = ({ children, onClose }) => (
       </button>
       {children}
     </div>
+  </div>
+);
+
+const TRUST_STYLES = {
+  new:      { bg: "#E2E8F0", label: "New",      icon: Sparkle },
+  rising:   { bg: "#BAE6FD", label: "Rising",   icon: ChartLineUp },
+  trusted:  { bg: "#A7F3D0", label: "Trusted",  icon: ShieldCheck },
+  verified: { bg: "#FACC15", label: "Verified", icon: ShieldCheck },
+};
+
+export const TrustBadge = ({ level, size = "sm" }) => {
+  const cfg = TRUST_STYLES[level] || TRUST_STYLES.new;
+  const Icon = cfg.icon;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 sq-badge mt-1 ${size === "lg" ? "text-sm px-3 py-1.5" : ""}`}
+      style={{ backgroundColor: cfg.bg }}
+      data-testid={`trust-badge-${level}`}
+    >
+      <Icon size={size === "lg" ? 16 : 12} weight="fill" /> {cfg.label}
+    </span>
+  );
+};
+
+export const ReliabilityCard = ({ user }) => {
+  const score = user?.reliability_score ?? 0;
+  const approval = user?.approval_rate;
+  const onTime = user?.on_time_rate;
+  return (
+    <div className="sq-card p-6" data-testid="reliability-card">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <span className="sq-label text-[#FF5A5F]">Reliability</span>
+          <h3 className="sq-h3 mt-1">Your trust score</h3>
+        </div>
+        <TrustBadge level={user?.trust_level || "new"} size="lg" />
+      </div>
+      <div className="flex items-end gap-2 mb-2">
+        <span className="text-5xl font-black" style={{ fontFamily: "Outfit" }} data-testid="reliability-score">{score}</span>
+        <span className="text-slate-500 pb-2">/ 100</span>
+      </div>
+      <div className="h-3 bg-slate-200 rounded-full border-2 border-slate-900 overflow-hidden mb-5">
+        <div className="h-full bg-[#10B981]" style={{ width: `${score}%` }} />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <Metric label="Accepted" value={user?.tasks_accepted || 0} icon={Briefcase} />
+        <Metric label="Completed" value={user?.tasks_completed || 0} icon={CheckCircle} />
+        <Metric label="Approval" value={approval !== null && approval !== undefined ? `${approval}%` : "—"} icon={Trophy} />
+        <Metric label="On-time" value={onTime !== null && onTime !== undefined ? `${onTime}%` : "—"} icon={Clock} />
+      </div>
+    </div>
+  );
+};
+
+const Metric = ({ label, value, icon: Icon }) => (
+  <div className="border-2 border-slate-900 rounded-lg p-3 bg-[#FFFDF9]">
+    <Icon size={16} weight="bold" className="mx-auto mb-1" />
+    <div className="text-xs text-slate-500 uppercase font-bold">{label}</div>
+    <div className="font-black text-lg" style={{ fontFamily: "Outfit" }}>{value}</div>
   </div>
 );

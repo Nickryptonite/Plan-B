@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { TopBar } from "../components/TopBar";
 import { TaskCard, formatINR } from "../components/TaskCard";
-import { Modal } from "./WorkerDashboard";
+import { Modal, TrustBadge } from "./WorkerDashboard";
 import { API, useAuth } from "../auth";
 import { CATEGORIES } from "../constants";
 import { Briefcase, CheckCircle, CurrencyInr, ListPlus, ClipboardText, Paperclip } from "@phosphor-icons/react";
@@ -125,8 +125,15 @@ export default function ClientDashboard() {
         {tab === "active" && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {active.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600 col-span-full">
-                No active tasks. Post one to get started!
+              <div className="sq-card p-10 text-center col-span-full" data-testid="empty-active">
+                <ListPlus size={40} weight="bold" className="mx-auto mb-3 text-slate-400" />
+                <h3 className="sq-h3 mb-2">No tasks posted yet</h3>
+                <p className="text-slate-600 mb-4">
+                  Post your first task in 60 seconds — describe what you need, set a budget, and start receiving applications.
+                </p>
+                <button onClick={() => setPostOpen(true)} className="sq-btn sq-btn-primary !px-4 !py-2 text-sm" data-testid="empty-post-task-btn">
+                  Post your first task
+                </button>
               </div>
             ) : active.map((t) => <TaskCard key={t.task_id} task={t} />)}
           </div>
@@ -135,7 +142,11 @@ export default function ClientDashboard() {
         {tab === "review" && (
           <div className="space-y-3">
             {pendingSubs.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600">No submissions to review right now.</div>
+              <div className="sq-card p-10 text-center" data-testid="empty-review">
+                <ClipboardText size={40} weight="bold" className="mx-auto mb-3 text-slate-400" />
+                <h3 className="sq-h3 mb-2">All caught up!</h3>
+                <p className="text-slate-600">No submissions to review right now. We'll notify workers when you do.</p>
+              </div>
             ) : pendingSubs.map((s) => (
               <div key={s.submission_id} className="sq-card p-5" data-testid={`review-sub-${s.submission_id}`}>
                 <div className="flex flex-wrap justify-between gap-3 mb-2">
@@ -156,7 +167,11 @@ export default function ClientDashboard() {
         {tab === "completed" && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {completed.length === 0 ? (
-              <div className="sq-card p-10 text-center text-slate-600 col-span-full">No completed tasks yet.</div>
+              <div className="sq-card p-10 text-center col-span-full" data-testid="empty-completed">
+                <CheckCircle size={40} weight="bold" className="mx-auto mb-3 text-slate-400" />
+                <h3 className="sq-h3 mb-2">No completed tasks yet</h3>
+                <p className="text-slate-600">Approved submissions will land here.</p>
+              </div>
             ) : completed.map((t) => <TaskCard key={t.task_id} task={t} />)}
           </div>
         )}
@@ -204,11 +219,28 @@ export default function ClientDashboard() {
 
 const ReviewModal = ({ sub, onClose, onReview }) => {
   const [feedback, setFeedback] = useState("");
+  const [worker, setWorker] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get(`${API}/users/${sub.worker_id}/public`).then((res) => {
+      if (cancelled) return;
+      setWorker(res.data);
+    }).catch(() => {/* silently skip */});
+    return () => { cancelled = true; };
+  }, [sub.worker_id]);
+
   return (
     <Modal onClose={onClose}>
       <span className="sq-label text-[#FF5A5F]">Review submission</span>
       <h2 className="sq-h2 mt-1 mb-2">{sub.task_title}</h2>
-      <div className="text-sm text-slate-500 mb-3">Submitted by {sub.worker_name}</div>
+      <div className="flex items-center gap-2 text-sm text-slate-500 mb-3 flex-wrap">
+        <span>Submitted by <strong>{sub.worker_name}</strong></span>
+        {worker?.trust_level && <TrustBadge level={worker.trust_level} />}
+        {worker?.reliability_score !== undefined && (
+          <span className="text-xs">• Reliability {worker.reliability_score}/100</span>
+        )}
+      </div>
       <div className="sq-card p-4 bg-[#FFFDF9] mb-4">
         <p className="text-slate-800 whitespace-pre-line">{sub.submission_text}</p>
         {sub.submission_url && (
