@@ -55,13 +55,16 @@ export default function WorkerDashboard() {
     }
   };
 
-  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [category, sort]);
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, sort]);
 
   // Debounced search
   useEffect(() => {
     const t = setTimeout(() => loadAll(), 300);
     return () => clearTimeout(t);
-    /* eslint-disable-next-line */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   const apply = async (task) => {
